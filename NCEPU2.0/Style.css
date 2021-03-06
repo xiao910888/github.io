@@ -1,0 +1,121 @@
+﻿body {
+
+
+}
+.menu {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    bottom: 120px;
+    width: 152px;
+}
+
+
+.map3d-walk {
+    border-radius: 5px;
+    height: 32px;
+    width: 32px;
+    position: absolute;
+    left: 10px;
+    bottom: 8px;
+    background: #303336 url(走路.png);
+    border: 1px solid #303336;
+    background-size: cover;
+    z-index: 6;
+    cursor: pointer;
+}
+    .map3d-walk:hover {
+        color: #fff;
+        fill: #fff;
+        background: #48b url(走路.png);
+        background-size: cover;
+        border-color: #aef;
+        box-shadow: 0 0 8px #fff;
+    }
+.map3d-drive {
+    border-radius: 5px;
+    height: 32px;
+    width: 32px;
+    position: absolute;
+    left: 52px;
+    bottom: 8px;
+    background: #303336 url(车辆.png);
+    border: 1px solid #303336;
+    background-size: cover;
+    z-index: 6;
+    cursor: pointer;
+}
+
+    .map3d-drive:hover {
+        color: #fff;
+        fill: #fff;
+        background: #48b url(车辆.png);
+        background-size: cover;
+        border-color: #aef;
+        box-shadow: 0 0 8px #fff;
+    }
+.map3d-fly {
+    border-radius: 5px;
+    height: 32px;
+    width: 32px;
+    position: absolute;
+    left: 94px;
+    bottom: 8px;
+    background: #303336 url(飞机.png);
+    border: 1px solid #303336;
+    background-size: cover;
+    z-index: 6;
+    cursor: pointer;
+}
+
+    .map3d-fly:hover {
+        color: #fff;
+        fill: #fff;
+        background: #48b url(飞机.png);
+        background-size: cover;
+        border-color: #aef;
+        box-shadow: 0 0 8px #fff;
+    }
+.map3d-auto {
+    border-radius: 5px;
+    height: 32px;
+    width: 32px;
+    position: absolute;
+    left: 136px;
+    bottom: 8px;
+    background: #303336 url(机器人.png);
+    border: 1px solid #303336;
+    background-size: cover;
+    z-index: 6;
+    cursor: pointer;
+}
+
+    .map3d-auto:hover {
+        color: #fff;
+        fill: #fff;
+        background: #48b url(机器人.png);
+        background-size: cover;
+        border-color: #aef;
+        box-shadow: 0 0 8px #fff;
+    }
+
+.fxp {
+    height: 32px;
+    width: 300px;
+    position: absolute;
+    left: 400px;
+    bottom: 130px;
+    background-size: cover;
+    z-index: 6;
+    cursor: pointer;
+}
+.tbl {
+    position: absolute;
+    right: 20px;
+    top: 130px;
+    border-bottom:2px;
+    background-color:black;
+    border-bottom-style:double;
+    color:white;
+    z-index:6;
+}

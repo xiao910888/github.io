@@ -1,0 +1,922 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <!--<script src="https://cesiumjs.org/releases/1.51/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesiumjs.org/releases/1.51/Build/Cesium/Widgets/widgets.css" rel="stylesheet">-->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.66/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.66/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="Style.css">
+    <!--<link rel="stylesheet" type="text/css" href="bucket.css">-->
+    <style type="text/css">
+
+        .auto-style1 {
+            width: 159px;
+        }
+
+        </style>
+</head>
+
+
+<body>
+    <div id="cesiumContainer" style="width:100%;height:100%">
+        <div class="map3d-walk" title="行走" onclick="walk()"></div>
+        <div class="map3d-drive" title="驾车" onclick="drive()"></div>
+        <div class="map3d-fly" title="飞行" onclick="fly()"></div>
+        <div class="map3d-auto" title="自动漫游" onclick="auto()"></div>
+        <div class="fxp"><img id="image" src="方向盘.png" style="width:inherit; display:none"></div>
+    </div>
+
+    <!--<div id="but" class="menu">
+        <button id="pos" type="button" class="yongyin" onclick="pos()" >show pos</button>
+    </div>-->
+
+    <div id="latlng_show" style="width:340px;height:30px;position:absolute;bottom:40px;right:200px;z-index:1;font-size:15px; display:none">
+        <div style="width:100px;height:30px;float:left;">
+            <font size="3" color="white">经度：<span id="longitude_show"></span></font>
+        </div>
+        <div style="width:100px;height:30px;float:left;">
+            <font size="3" color="white">纬度：<span id="latitude_show"></span></font>
+        </div>
+        <div style="width:100px;height:30px;float:left;">
+            <font size="3" color="white">视角高：<span id="altitude_show"></span>km</font>
+        </div>
+        <div style="width:100px;height:30px;float:left;">
+            <font size="3" color="white">相机高度：<span id="high_show"></span></font>
+        </div>
+        <div style="width:100px;height:30px;float:left;">
+            <font size="3" color="white">当前位置：<span id="building_show"></span></font>
+        </div>
+    </div>
+    <script>
+        //Cesium.Ion.defaultAccessToken = 'your_access_token';//从ion账户提供一个token去访问Bing影像底图
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhNWVjMzVlNC1lMDlkLTRhNjctOWU4OS0yZWM5Yjc0YWYwNjgiLCJpZCI6MjczMzYsInNjb3BlcyI6WyJhc3IiLCJnYyJdLCJpYXQiOjE1ODkzNDA2MzF9.y8UvrswpLvOJUCGX6Engy5aMZOv7Ovcx3XPJFwTFUS8';
+
+        //创建Cesium程序的基础对象 Viewer widget
+        var viewer = new Cesium.Viewer('cesiumContainer', {
+
+            geocoder: true, //搜索框
+            // homeButton: true,
+            sceneModePicker: false,
+            baseLayerPicker: false,
+            navigationHelpButton: false,
+            animation: false,
+            timeline: false,
+            fullscreenButton: false,
+            vrButton: false,
+            shadows: true, //影子
+            infoBox: true,
+            //terrainProvider: Cesium.createWorldTerrain(),
+            // requestWaterMask: true, // required for 水面数据
+             //requestVertexNormals: true // required for 光照数据
+        });
+
+
+        // 删除默认的影像图层
+        viewer.imageryLayers.remove(viewer.imageryLayers.get(0));
+
+        // 增加谷歌影像底图
+        viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+            url: 'http://www.google.cn/maps/vt?lyrs=s&x={x}&y={y}&z={z}',
+            tilingScheme: new Cesium.WebMercatorTilingScheme()
+        })
+        );
+        
+
+
+        //取当前场景每帧渲染前的事件，监听该事件在每帧渲染之前触发。
+        viewer.scene.preRender.addEventListener(function () {
+            if ((states == 2||states == 3) && jump_flag == 0) {
+                Highchange();
+            }
+            else if (states == 2 && jump_flag != 0) {
+                jump(1);
+            }
+
+        });
+
+
+        var scene = viewer.scene;
+        var canvas = viewer.canvas;
+        canvas.setAttribute('tabindex', '0'); // needed to put focus on the canvas
+        canvas.onclick = function () {
+            canvas.focus();
+        };
+        var ellipsoid = scene.globe.ellipsoid;
+
+
+
+        //创建变量记录当前鼠标位置，然后标记并跟随Camera移动轨迹：
+        var startMousePosition;
+        var mousePosition;
+        var states = 1;//1为初始界面，2走路，3开车，4飞行，5自动漫游
+        var shake = 0;      //走路视角抖动
+        var jump_flag = 0;
+        var fangx_flag = 0
+        var flags = {
+            looking: false,
+            moveForward: false,
+            moveBackward: false,
+            moveUp: false,
+            moveDown: false,
+            moveLeft: false,
+            moveRight: false
+        };
+
+        document.addEventListener('keydown', function (e) {
+            var flagName = getFlagForKeyCode(e.keyCode);
+            if (typeof flagName !== 'undefined') {
+                flags[flagName] = true;
+            }
+        }, false);
+
+        document.addEventListener('keyup', function (e) {
+            var flagName = getFlagForKeyCode(e.keyCode);
+            if (typeof flagName !== 'undefined') {
+                flags[flagName] = false;
+            }
+        }, false);
+
+        //添加一个事件控制用户设置标记，当鼠标左键被点击的时候，用于记录当前鼠标的位置：
+        //var handler = new Cesium.ScreenSpaceEventHandler(canvas);
+
+        //handler.setInputAction(function (movement) {
+        //    flags.looking = true;
+        //    mousePosition = startMousePosition = Cesium.Cartesian3.clone(movement.position);
+        //}, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+        //handler.setInputAction(function (movement) {
+        //    mousePosition = movement.endPosition;
+        //}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+        //handler.setInputAction(function (position) {
+        //    flags.looking = false;
+        //}, Cesium.ScreenSpaceEventType.LEFT_UP);
+
+        function getFlagForKeyCode(keyCode) {
+            if (states == 1 || states==4) {
+                switch (keyCode) {
+                    case 'W'.charCodeAt(0):
+                        return 'moveForward';
+                    case 'S'.charCodeAt(0):
+                        return 'moveBackward';
+                    case 'A'.charCodeAt(0):
+                        return 'moveLeft';
+                    case 'D'.charCodeAt(0):
+                        return 'moveRight';
+                    case 32:
+                        return 'moveUp';
+                    case 17:
+                        return 'moveDown';
+
+
+                    case 38:
+                        return 'lookUp';
+                    case 40:
+                        return 'lookDown';
+                    case 37:
+                        return 'lookLeft';
+                    case 39:
+                        return 'lookRight';
+                    default:
+                        return undefined;
+                }
+            }
+            else if (states == 2) {
+                switch (keyCode) {
+                    case 'W'.charCodeAt(0):
+                        if (shake < 3)
+                            shake++;
+                        else
+                            shake = 0;
+                        return 'moveForward';
+                    case 'S'.charCodeAt(0):
+                        if (shake < 3)
+                            shake++;
+                        else
+                            shake = 0;
+                        return 'moveBackward';
+                    case 'A'.charCodeAt(0):
+                        return 'lookLeft';
+                    case 'D'.charCodeAt(0):
+                        return 'lookRight';
+                    case 32:
+                        return 'Jump';
+                    case 38:
+                        return 'lookUp';
+                    case 40:
+                        return 'lookDown';
+                    default:
+                        return undefined;
+                }
+            }
+            else if (states == 3) {
+                switch (keyCode) {
+                    case 'W'.charCodeAt(0):
+                        return 'moveForward';
+                    case 'S'.charCodeAt(0):
+                        return 'moveBackward';
+                    case 'A'.charCodeAt(0):
+                        return 'lookLeft';
+                    case 'D'.charCodeAt(0):
+                        return 'lookRight';
+                    default:
+                        return undefined;
+                }
+            }
+        }
+
+
+
+
+        //现在当标记表明事件发生为true是，我们更新（update）camera。我们新增**onTick的监听事件在clock中：
+        viewer.clock.onTick.addEventListener(function (clock) {
+            var camera = viewer.camera;
+
+            //接下来，我们让Camera指向鼠标指向的方向。在变量声明之后添加下列代码到事件监听函数：
+            /*lookRight和lookUp只需要一个角度参数用于表示旋转的角度。
+            我们将鼠标坐标转换为范围（-1.0，1.0），坐标（0.0，0.0）位于画布的中心。
+            鼠标距中心的距离决定了旋转的速度。靠近中心的位置移动Camera的速度较慢，
+            而远离中心的位置移动Camera的速度较快。
+            */
+            //if (flags.looking) {
+            //    var width = canvas.clientWidth;
+            //    var height = canvas.clientHeight;
+
+            //    // Coordinate (0.0, 0.0) will be where the mouse was clicked.
+            //    var x = (mousePosition.x - startMousePosition.x) / width;
+            //    var y = -(mousePosition.y - startMousePosition.y) / height;
+
+            //    var lookFactor = 0.05;
+            //    camera.lookRight(x * lookFactor);
+            //    camera.lookUp(y * lookFactor);
+            //}
+
+
+            // Change movement speed based on the distance of the camera to the surface of the ellipsoid.
+            var cameraHeight = ellipsoid.cartesianToCartographic(camera.position).height;
+            var moveRate_walk = 0.5;//cameraHeight;
+            var moveRate_drive = 1.5;
+            var moveRate_fly = 6;
+            var shakeRate = 0.05;
+            if (states == 1) {
+                if (flags.moveForward) {
+                    camera.moveForward(moveRate_walk);
+                }
+                if (flags.moveBackward) {
+                    camera.moveBackward(moveRate_walk);
+                }
+                if (flags.moveUp) {
+                    camera.moveUp(moveRate_walk);
+                }
+                if (flags.moveDown) {
+                    camera.moveDown(moveRate_walk);
+                }
+                if (flags.moveLeft) {
+                    camera.moveLeft(moveRate_walk);
+                }
+                if (flags.moveRight) {
+                    camera.moveRight(moveRate_walk);
+                }
+                if (flags.lookLeft) {
+                    camera.lookLeft(0.007);
+                }
+                if (flags.lookRight) {
+                    camera.lookRight(0.007);
+                }
+                if (flags.lookUp) {
+                    camera.lookUp(0.007);
+                }
+                if (flags.lookDown) {
+                    camera.lookDown(0.007);
+                }
+            }
+            else if (states == 2) {
+                if (flags.moveForward) {
+                    switch (shake) {
+                        case 1:
+                            camera.moveUp(shakeRate);
+                            camera.moveRight(shakeRate);
+                            break;
+                        case 2:
+                            camera.moveDown(shakeRate);
+                            camera.moveLeft(shakeRate);
+                            break;
+                        case 3:
+                            camera.moveUp(shakeRate);
+                            camera.moveLeft(shakeRate);
+                            break;
+                        case 0:
+                            camera.moveDown(shakeRate);
+                            camera.moveRight(shakeRate);
+                            break;
+                    }
+                    camera.moveForward(moveRate_walk);
+                }
+                if (flags.moveBackward) {
+                    switch (shake) {
+                        case 1:
+                            camera.moveUp(shakeRate);
+                            camera.moveRight(shakeRate);
+                            break;
+                        case 2:
+                            camera.moveDown(shakeRate);
+                            camera.moveLeft(shakeRate);
+                            break;
+                        case 3:
+                            camera.moveUp(shakeRate);
+                            camera.moveLeft(shakeRate);
+                            break;
+                        case 0:
+                            camera.moveDown(shakeRate);
+                            camera.moveRight(shakeRate);
+                            break;
+                    }
+                    camera.moveBackward(moveRate_walk);
+                }
+                if (flags.Jump && viewer.camera.positionCartographic.height < maxHeight) {
+                    jump_flag = 1;
+                }
+                if (flags.lookLeft) {
+                    camera.lookLeft(0.02);
+                }
+                if (flags.lookRight) {
+                    camera.lookRight(0.02);
+                }
+                if (flags.lookUp) {
+                    camera.lookUp(0.02);
+                }
+                if (flags.lookDown) {
+                    camera.lookDown(0.02);
+                }
+            }
+            else if (states == 3) {
+                var fangx = document.getElementById("image");
+                if (flags.moveForward) {
+                    camera.lookRight(fangx_flag / 1000);
+                    camera.moveForward(moveRate_drive);
+                }
+                if (flags.moveBackward) {
+                    camera.lookRight(-fangx_flag / 1000);
+                    camera.moveBackward(moveRate_drive);
+                }
+                if (flags.lookLeft) {
+                    fangx_flag -= 5;
+                    fangx.style.transform = "rotate(" + fangx_flag + "deg)";
+                }
+                if (flags.lookRight) {
+                    fangx.style.transform = "rotate(" + fangx_flag + "deg)";
+                    fangx_flag += 5;
+                }
+            }
+            else if (states == 4) {
+                if (flags.moveForward) {
+                    camera.moveForward(moveRate_fly);
+                }
+                if (flags.moveBackward) {
+                    camera.moveBackward(moveRate_fly);
+                }
+                if (flags.moveUp) {
+                    camera.moveUp(moveRate_fly/3);
+                }
+                if (flags.moveDown) {
+                    camera.moveDown(moveRate_fly/3);
+                }
+                if (flags.moveLeft) {
+                    camera.moveLeft(moveRate_fly);
+                }
+                if (flags.moveRight) {
+                    camera.moveRight(moveRate_fly);
+                }
+                if (flags.lookLeft) {
+                    camera.lookLeft(0.03);
+                }
+                if (flags.lookRight) {
+                    camera.lookRight(0.03);
+                }
+                if (flags.lookUp) {
+                    camera.lookUp(0.03);
+                }
+                if (flags.lookDown) {
+                    camera.lookDown(0.03);
+                }
+            }
+        });
+
+
+        function jump(jump_hight) {
+            if (jump_flag <= 20) {
+                var q, next;
+                q = -jump_hight / 100 * (jump_flag - 11) * (jump_flag - 11) + jump_hight;
+                next = -jump_hight / 100 * (jump_flag - 10) * (jump_flag - 10) + jump_hight;
+
+                if (next - q > 0)
+                    viewer.camera.moveUp(next - q);
+                else if (next - q < 0)
+                    window.setTimeout(viewer.camera.moveDown(q - next), 300);//0.3s
+                q = next;
+                jump_flag++;
+            }
+            if (jump_flag == 20)
+                jump_flag = 0;
+        }
+
+        
+        //***********************************************************************************************
+        var tileset;
+        viewer.scene.globe.depthTestAgainstTerrain = true;//不进行地形深度测试
+        function Change() {
+            viewer.scene.primitives.remove(tileset);
+            var nurl = document.getElementById("nurl").value;
+            var ntx = document.getElementById("ntx").value;
+            var nty = document.getElementById("nty").value;
+            var ntz = document.getElementById("ntz").value;
+            var nrx = document.getElementById("nrx").value;
+            var nry = document.getElementById("nry").value;
+            var nrz = document.getElementById("nrz").value;
+            var ndx = document.getElementById("ndx").value;
+            var params = {
+                tx: ntx,  //模型中心X轴坐标（经度，单位：十进制度）
+                ty: nty,    //模型中心Y轴坐标（纬度，单位：十进制度）
+                tz: ntz,    //模型中心Z轴坐标（高程，单位：米）
+                rx: nrx,    //X轴（经度）方向旋转角度（单位：度）
+                ry: nry,    //Y轴（纬度）方向旋转角度（单位：度）
+                rz: nrz      //Z轴（高程）方向旋转角度（单位：度）
+            };
+             tileset = viewer.scene.primitives.add(new Cesium.Cesium3DTileset({
+                url: nurl
+            }));
+            viewer.scene.primitives.add(tileset);
+            tileset.readyPromise.then(function (tileset) {
+                update3dtilesMaxtrix(tileset);
+
+                //viewer.zoomTo(tileset, new Cesium.HeadingPitchRange(0.5, -0.2, tileset.boundingSphere.radius * 1.0));
+            });
+            
+            
+
+            function update3dtilesMaxtrix(tileset) {
+                //旋转
+                var mx = Cesium.Matrix3.fromRotationX(Cesium.Math.toRadians(params.rx));
+                var my = Cesium.Matrix3.fromRotationY(Cesium.Math.toRadians(params.ry));
+                var mz = Cesium.Matrix3.fromRotationZ(Cesium.Math.toRadians(params.rz));
+                var rotationX = Cesium.Matrix4.fromRotationTranslation(mx);
+                var rotationY = Cesium.Matrix4.fromRotationTranslation(my);
+                var rotationZ = Cesium.Matrix4.fromRotationTranslation(mz);
+                //平移
+                var position = Cesium.Cartesian3.fromDegrees(params.tx, params.ty, params.tz);
+                var m = Cesium.Transforms.eastNorthUpToFixedFrame(position);
+                //旋转、平移矩阵相乘
+                Cesium.Matrix4.multiply(m, rotationX, m);
+                Cesium.Matrix4.multiply(m, rotationY, m);
+                Cesium.Matrix4.multiply(m, rotationZ, m);
+
+                var scale = Cesium.Matrix4.fromUniformScale(ndx);
+                Cesium.Matrix4.multiply(m, scale, m);
+                //赋值给tileset
+                tileset._root.transform = m;
+            }
+            viewer.flyTo(tileset);
+        }
+
+        //********************************标明经纬度*****************************************************
+
+        var longitude_show = document.getElementById('longitude_show');
+        var latitude_show = document.getElementById('latitude_show');
+        var altitude_show = document.getElementById('altitude_show');
+        var building_show = document.getElementById('building_show');
+        var canvas = viewer.scene.canvas;
+        //具体事件的实现
+        var ellipsoid = viewer.scene.globe.ellipsoid;
+        var handler = new Cesium.ScreenSpaceEventHandler(canvas);
+        var lat_String, log_String, alti_String;
+        handler.setInputAction(function (movement) {
+            //捕获椭球体，将笛卡尔二维平面坐标转为椭球体的笛卡尔三维坐标，返回球体表面的点
+            var cartesian = viewer.camera.pickEllipsoid(movement.endPosition, ellipsoid);
+            if (cartesian) {
+                //将笛卡尔三维坐标转为地图坐标（弧度）
+                var cartographic = viewer.scene.globe.ellipsoid.cartesianToCartographic(cartesian);
+                //将地图坐标（弧度）转为十进制的度数
+                lat_String = Cesium.Math.toDegrees(cartographic.latitude).toFixed(6);
+                log_String = Cesium.Math.toDegrees(cartographic.longitude).toFixed(6);
+                alti_String = (viewer.camera.positionCartographic.height / 1000).toFixed(6);
+                longitude_show.innerHTML = log_String;
+                latitude_show.innerHTML = lat_String;
+                altitude_show.innerHTML = alti_String;
+            }
+            if (log_String > 155.50749 && log_String < 155.50837 && lat_String > 38.885128 && lat_String < 38.885829)
+                building_show.innerHTML = "教十";
+
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+        handler.setInputAction(function (movement) {
+            window.console.log(log_String + "," + lat_String);
+        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+        const minHeight = 3.29;
+        const maxHeight = 3.31;
+
+        function Highchange() {
+            var eye = viewer.camera.positionCartographic;
+            high_show.innerHTML = viewer.camera.positionCartographic.height;
+            // 判断相机坐标是否小于阈值，若小于阈值，则保持视点方位，修改相机高度
+            if (eye.height < minHeight) {
+                viewer.camera.setView({
+                    destination: Cesium.Cartesian3.fromRadians(eye.longitude, eye.latitude, minHeight),
+                    orientation: {
+                        direction: viewer.camera.direction,
+                        up: viewer.camera.up
+                    }
+                });
+            } if (eye.height > maxHeight) {
+                viewer.camera.setView({
+                    destination: Cesium.Cartesian3.fromRadians(eye.longitude, eye.latitude, maxHeight),
+                    orientation: {
+                        direction: viewer.camera.direction,
+                        up: viewer.camera.up
+                    }
+                });
+            }
+        }
+
+
+        function walk() {
+            if (states != 2) {
+                // disable the default event handlers禁用默认事件操作
+                scene.screenSpaceCameraController.enableRotate = false;     //允许用户旋转相机
+                // scene.screenSpaceCameraController.enableTranslate = false;
+                scene.screenSpaceCameraController.enableZoom = false;         //如果为true，则允许用户放大和缩小
+                scene.screenSpaceCameraController.enableLook = false;       //如果为true，则允许用户使用自由外观。如果为false，则只能通过平移或旋转来更改摄像机的观看方向
+
+                states = 2;
+
+                // 4. 飞向利用方位角(heading)、俯仰角(pitch)、滚动角(roll)表示方向(orientatin)的位置
+                viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(115.507074, 38.885064, minHeight),
+                    orientation: {
+                        heading: Cesium.Math.toRadians(70),
+                        pitch: Cesium.Math.toRadians(0),
+                        roll: 0.0
+                    }
+                });
+            }
+            else if (states == 2) {
+                scene.screenSpaceCameraController.enableRotate = true;     //允许用户旋转相机
+                // scene.screenSpaceCameraController.enableTranslate = false;
+                scene.screenSpaceCameraController.enableZoom = true;         //如果为true，则允许用户放大和缩小
+                scene.screenSpaceCameraController.enableLook = true;       //如果为true，则允许用户使用自由外观。如果为false，则只能通过平移或旋转来更改摄像机的观看方向
+
+                states = 1;
+                viewer.flyTo(tileset);
+            }
+        }
+
+        function drive() {
+            var fangx = document.getElementById("image");
+            if (states != 3) {
+                // disable the default event handlers禁用默认事件操作
+                scene.screenSpaceCameraController.enableRotate = false;     //允许用户旋转相机
+                // scene.screenSpaceCameraController.enableTranslate = false;
+                scene.screenSpaceCameraController.enableZoom = false;         //如果为true，则允许用户放大和缩小
+                scene.screenSpaceCameraController.enableLook = false;       //如果为true，则允许用户使用自由外观。如果为false，则只能通过平移或旋转来更改摄像机的观看方向
+
+                states = 3;
+
+                // 4. 飞向利用方位角(heading)、俯仰角(pitch)、滚动角(roll)表示方向(orientatin)的位置
+                var eye = viewer.camera.positionCartographic;
+               viewer.camera.setView({
+                    destination: Cesium.Cartesian3.fromRadians(eye.longitude, eye.latitude, minHeight-0.5),
+                    orientation: {
+                        direction: viewer.camera.direction,
+                        up: viewer.camera.up
+                    }
+                });
+                window.console.log(states);
+
+
+                fangx.style.display = "block";
+
+            }
+            else if (states == 3) {
+                scene.screenSpaceCameraController.enableRotate = true;     //允许用户旋转相机
+                // scene.screenSpaceCameraController.enableTranslate = false;
+                scene.screenSpaceCameraController.enableZoom = true;         //如果为true，则允许用户放大和缩小
+                scene.screenSpaceCameraController.enableLook = true;       //如果为true，则允许用户使用自由外观。如果为false，则只能通过平移或旋转来更改摄像机的观看方向
+
+                states = 1;
+                fangx.style.display = "none";
+                viewer.flyTo(tileset);
+            }
+        }
+        function fly() {
+
+            if (states != 4) {
+                // disable the default event handlers禁用默认事件操作
+                scene.screenSpaceCameraController.enableRotate = false;     //允许用户旋转相机
+                // scene.screenSpaceCameraController.enableTranslate = false;
+                scene.screenSpaceCameraController.enableZoom = false;         //如果为true，则允许用户放大和缩小
+                scene.screenSpaceCameraController.enableLook = false;       //如果为true，则允许用户使用自由外观。如果为false，则只能通过平移或旋转来更改摄像机的观看方向
+
+                states = 4;
+                
+                var fangx = document.getElementById("image");
+                   fangx.style.display = "none";
+
+                // 4. 飞向利用方位角(heading)、俯仰角(pitch)、滚动角(roll)表示方向(orientatin)的位置
+                var eye = viewer.camera.positionCartographic;
+               viewer.camera.setView({
+                    destination: Cesium.Cartesian3.fromRadians(eye.longitude, eye.latitude, 15),
+                    orientation: {
+                        direction: viewer.camera.direction,
+                        up: viewer.camera.up
+                    }
+                });
+            }
+            else if (states == 4) {
+                scene.screenSpaceCameraController.enableRotate = true;     //允许用户旋转相机
+                // scene.screenSpaceCameraController.enableTranslate = false;
+                scene.screenSpaceCameraController.enableZoom = true;         //如果为true，则允许用户放大和缩小
+                scene.screenSpaceCameraController.enableLook = true;       //如果为true，则允许用户使用自由外观。如果为false，则只能通过平移或旋转来更改摄像机的观看方向
+
+                states = 1;
+
+                viewer.flyTo(tileset);
+            }
+        }
+        function auto() {
+            if (states != 5) {
+                // disable the default event handlers禁用默认事件操作
+                scene.screenSpaceCameraController.enableRotate = false;     //允许用户旋转相机
+                // scene.screenSpaceCameraController.enableTranslate = false;
+                scene.screenSpaceCameraController.enableZoom = false;         //如果为true，则允许用户放大和缩小
+                scene.screenSpaceCameraController.enableLook = false;       //如果为true，则允许用户使用自由外观。如果为false，则只能通过平移或旋转来更改摄像机的观看方向
+
+                states = 5;
+                var fangx = document.getElementById("image");
+                   fangx.style.display = "none";
+                viewer.scene.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(marks[0].lng, marks[0].lat, marks[0].height),  //定位坐标点，建议使用谷歌地球坐标位置无偏差
+                    duration: 3   //定位的时间间隔
+                });
+
+                setTimeout(function () {
+                    flyEvent('play');
+                }, 3000);
+            }
+            else if (states == 5) {
+                states = 1;
+                flyEvent('pause');
+                scene.screenSpaceCameraController.enableRotate = true;     //允许用户旋转相机
+                // scene.screenSpaceCameraController.enableTranslate = false;
+                scene.screenSpaceCameraController.enableZoom = true;         //如果为true，则允许用户放大和缩小
+                scene.screenSpaceCameraController.enableLook = true;       //如果为true，则允许用户使用自由外观。如果为false，则只能通过平移或旋转来更改摄像机的观看方向
+
+
+                viewer.flyTo(tileset);
+            }
+        }
+
+
+        //*******************************************************************************
+        //自动漫游
+
+
+
+
+
+        /** 开始、暂停、停止按钮事件开始 **/
+        var remainTime = 0;
+        var usedTime = 0;
+        function flyEvent(eventType) {
+            if (!flyEvent) return;
+            if (eventType == 'play') {
+                flyExtent();
+                window.console.log("play");
+                remainTime = 0;
+            }
+            else if (eventType == 'pause') {
+
+                remainTime = Cesium.JulianDate.secondsDifference(viewer.clock.stopTime, viewer.clock.currentTime);
+                usedTime += Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, viewer.clock.startTime);
+                var len = viewer.clock.onTick.numberOfListeners;
+                for (var i = 0; i < len; i++)
+                    viewer.clock.onTick.removeEventListener(viewer.clock.onTick._listeners[i]);
+                window.console.log("pause");
+            }
+            else if (eventType == 'stop') {
+                // 停止按钮
+
+                marksIndex = 1;
+                remainTime = 0;
+                usedTime = 0;
+                var len = viewer.clock.onTick.numberOfListeners;
+                for (var i = 0; i < len; i++)
+                    viewer.clock.onTick.removeEventListener(viewer.clock.onTick._listeners[i]);
+                window.console.log("stop");
+            }
+        } /** 开始、暂停、停止按钮事件结束 **/
+
+        /** 相机视角飞行 开始 **/
+        var autoheight = 10;
+        var marks = [// height:相机高度(单位米) flytime:相机两个标注点飞行时间(单位秒)
+            { lng: 115.507034, lat: 38.885237, height: autoheight, flytime: 10 },
+            { lng: 115.507226, lat: 38.885712, height: autoheight, flytime: 10 },
+            { lng: 115.507579, lat: 38.886112, height: autoheight, flytime: 10 },
+            { lng: 115.507728, lat:38.886414, height: autoheight, flytime: 10 },
+            { lng:115.507355, lat:38.886587, height: autoheight, flytime: 10 },
+            { lng: 115.507232, lat:38.886665, height: autoheight, flytime: 10 },
+            { lng: 115.506837, lat: 38.886734, height: autoheight, flytime: 10 },
+            { lng: 115.506540, lat: 38.886794, height: autoheight, flytime: 10 },
+            { lng: 115.506656, lat: 38.887411, height: autoheight, flytime: 10 },
+            { lng: 115.506722, lat: 38.887829, height: autoheight, flytime: 10 },
+            { lng: 115.506589, lat: 38.887941, height: autoheight, flytime: 10 },
+            { lng: 115.507150, lat:38.888506, height: autoheight, flytime: 10 },
+            { lng: 115.508259, lat: 38.888342, height: autoheight, flytime: 10 },
+            { lng: 115.508534, lat: 38.889281, height: autoheight, flytime: 10 },
+            { lng: 115.509440, lat: 38.889175, height: autoheight, flytime: 10 },
+            { lng: 115.509652, lat: 38.889039, height: autoheight, flytime: 10 },
+            { lng: 115.510955, lat: 38.888880, height: autoheight, flytime: 10 },
+            { lng: 115.511194, lat: 38.889231, height: autoheight, flytime: 10 },
+            { lng: 115.511279, lat: 38.889842, height: autoheight, flytime: 10 },
+            { lng: 115.510210, lat: 38.889983, height: autoheight, flytime: 10 },
+            { lng: 115.510103, lat: 38.889944, height: autoheight, flytime: 10 },
+            { lng: 115.509800, lat:38.889985, height: autoheight, flytime: 10 },
+            { lng:115.510117, lat: 38.891299, height: autoheight, flytime: 10 },
+            { lng: 115.510141, lat: 38.891389, height: autoheight, flytime: 10 },
+            { lng: 115.508876, lat: 38.891584, height: autoheight, flytime: 10 },
+            { lng: 115.508573, lat: 38.891307, height: autoheight, flytime: 10 },
+            { lng: 115.508259, lat: 38.891019, height: autoheight, flytime: 10 },
+            { lng: 115.508081, lat: 38.890502, height: autoheight, flytime: 10 },
+            { lng: 115.507828, lat: 38.890025, height: autoheight, flytime: 10 },
+            { lng: 115.507330, lat: 38.889451, height: autoheight, flytime: 10 },
+            { lng: 115.506996, lat:38.888594, height: autoheight, flytime: 10 },
+
+        ];// 地标集合 根据地标顺序来进行漫游
+        var marksIndex = 1;
+        var pitchValue = 0;// 相机看点的角度，如果大于0那么则是从地底往上看
+
+
+        function flyExtent() {
+            var pitch = Cesium.Math.toRadians(pitchValue);
+            // 时间间隔2秒钟
+            setExtentTime(marks[marksIndex].flytime);
+            var Exection = function TimeExecution() {
+                var preIndex = marksIndex - 1;
+                if (marksIndex == 0) {
+                    preIndex = marks.length - 1;
+                }
+                var heading = bearing(marks[preIndex].lat, marks[preIndex].lng, marks[marksIndex].lat, marks[marksIndex].lng);
+                heading = Cesium.Math.toRadians(heading);
+                // 当前已经过去的时间，单位s
+                var delTime = Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, viewer.clock.startTime);
+                var originLat = marksIndex == 0 ? marks[marks.length - 1].lat : marks[marksIndex - 1].lat;
+                var originLng = marksIndex == 0 ? marks[marks.length - 1].lng : marks[marksIndex - 1].lng;
+                var endPosition = Cesium.Cartesian3.fromDegrees(
+                    (originLng + (marks[marksIndex].lng - originLng) / marks[marksIndex].flytime * delTime),
+                    (originLat + (marks[marksIndex].lat - originLat) / marks[marksIndex].flytime * delTime),
+                    marks[marksIndex].height
+                );
+                viewer.scene.camera.setView({
+                    destination: endPosition,
+                    orientation: {
+                        heading: heading,
+                        pitch: pitch,
+                    }
+                });
+                if (Cesium.JulianDate.compare(viewer.clock.currentTime, viewer.clock.stopTime) >= 0 || states != 5) {
+                    viewer.clock.onTick.removeEventListener(Exection);
+                    changeCameraHeading();
+                }
+            };
+            if (states == 5)
+                viewer.clock.onTick.addEventListener(Exection);
+        }
+        // 相机原地定点转向
+        function changeCameraHeading() {
+            var nextIndex = marksIndex + 1;
+            if (marksIndex == marks.length - 1) {
+                nextIndex = 0;
+            }
+            // 计算两点之间的方向
+            var heading = bearing(marks[marksIndex].lat, marks[marksIndex].lng, marks[nextIndex].lat, marks[nextIndex].lng);
+            // 相机看点的角度，如果大于0那么则是从地底往上看，所以要为负值
+            var pitch = Cesium.Math.toRadians(pitchValue);
+            // 给定飞行一周所需时间，比如10s, 那么每秒转动度数
+            var angle = (heading - Cesium.Math.toDegrees(viewer.camera.heading)) / 2;
+            if (angle < -90)
+                angle += 180;
+            else if (angle > 90)
+                angle -= 180;
+            // 时间间隔2秒钟
+            setExtentTime(2);
+            // 相机的当前heading
+            var initialHeading = viewer.camera.heading;
+            var Exection = function TimeExecution() {
+                // 当前已经过去的时间，单位s
+                var delTime = Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, viewer.clock.startTime);
+                var heading = Cesium.Math.toRadians(delTime * angle) + initialHeading;
+                viewer.scene.camera.setView({
+                    orientation: {
+                        heading: heading,
+                        pitch: pitch,
+                    }
+                });
+                if (Cesium.JulianDate.compare(viewer.clock.currentTime, viewer.clock.stopTime) >= 0) {
+                    viewer.clock.onTick.removeEventListener(Exection);
+                    marksIndex = ++marksIndex >= marks.length ? 0 : marksIndex;
+                    flyExtent();
+                }
+            };
+            viewer.clock.onTick.addEventListener(Exection);
+        }
+        // 设置飞行的时间到viewer的时钟里
+        function setExtentTime(time) {
+            var startTime = Cesium.JulianDate.fromDate(new Date());
+            var stopTime = Cesium.JulianDate.addSeconds(startTime, time, new Cesium.JulianDate());
+            viewer.clock.startTime = startTime.clone();  // 开始时间
+            viewer.clock.stopTime = stopTime.clone();     // 结束时间
+            viewer.clock.currentTime = startTime.clone(); // 当前时间
+            viewer.clock.clockRange = Cesium.ClockRange.CLAMPED; // 行为方式
+            viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK; // 时钟设置为当前系统时间; 忽略所有其他设置。
+        }
+        /** 相机视角飞行 结束 **/
+
+        /** 飞行时 camera的方向调整(heading) 开始 **/
+        // Converts from degrees to radians.
+        function toRadians(degrees) {
+            return degrees * Math.PI / 180;
+        }
+
+        // Converts from radians to degrees.
+        function toDegrees(radians) {
+            return radians * 180 / Math.PI;
+        }
+
+        function bearing(startLat, startLng, destLat, destLng) {
+            startLat = this.toRadians(startLat);
+            startLng = this.toRadians(startLng);
+            destLat = this.toRadians(destLat);
+            destLng = this.toRadians(destLng);
+
+            let y = Math.sin(destLng - startLng) * Math.cos(destLat);
+            let x = Math.cos(startLat) * Math.sin(destLat) - Math.sin(startLat) * Math.cos(destLat) * Math.cos(destLng - startLng);
+            let brng = Math.atan2(y, x);
+            let brngDgr = this.toDegrees(brng);
+            return (brngDgr + 360) % 360;
+        }
+        /** 飞行时 camera的方向调整(heading) 结束 **/
+        function YinChange() {
+            document.getElementById("change").style.display = "none";
+        }
+
+
+    </script>
+
+    <div id="change" style="height: 270px; width: 300px; position: absolute; z-index: 6; right: 20px; top: 100px; background-color: #000000; color: #FFFFFF;">
+        <table id="tblchange" style="width:100%;">
+            <tr>
+                <td class="auto-style1">模型</td>
+                <td >
+                    <input id="nurl" type="text" value="http://localhost:9000/model/66f33710abe411eaba76ddd984e5d96d/tileset.json" /></td>
+            </tr>
+            <tr>
+                <td class="auto-style1">经度</td>
+                <td >
+                    <input id="ntx" type="text" value="115.5081015" /></td>
+            </tr>
+            <tr>
+                <td class="auto-style1">纬度</td>
+                <td >
+                    <input id="nty" type="text" value="38.88816701"/></td>
+            </tr>
+            <tr>
+                <td class="auto-style1">高程</td>
+                <td >
+                    <input id="ntz" type="text" value="33"/></td>
+            </tr>
+            <tr>
+                <td class="auto-style1">经度方向旋转</td>
+                <td >
+                    <input id="nrx" type="text" value="-4.3" /></td>
+            </tr>
+            <tr>
+                <td class="auto-style1">纬度方向旋转</td>
+                <td >
+                    <input id="nry" type="text" value="-7.9" /></td>
+            </tr>
+            <tr>
+                <td class="auto-style1">高程方向旋转</td>
+                <td >
+                    <input id="nrz" type="text" value="80" /></td>
+            </tr>
+            <tr>
+                <td class="auto-style1">大小</td>
+                <td >
+                    <input id="ndx" type="text" value="0.0009947" /></td>
+            </tr>
+        </table>
+        <input id="btnchange" type="button" value="确认" onclick="Change()"/>
+        <input id="btnyin" type="button" value="隐藏" onclick="YinChange()"/></div>
+
+</body>
+</html>
